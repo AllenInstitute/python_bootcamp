@@ -1,4 +1,5 @@
 import glob
+from html.parser import HTMLParser
 import os, sys, re, argparse, json
 
 from xml.etree import ElementTree
@@ -16,14 +17,14 @@ def make_unsolved_notebook(nb_file):
     # remove answers from exercise cells
     last_md_cell_is_exercise = False
     for cell in nb_data['cells']:
-        if cell['cell_type'] == 'markdown':
-            tree = get_markdown_xml(cell['source'])
-            last_md_cell_is_exercise = tree.attrib['class'] == 'exercise'
-        else:
-            last_md_cell_is_exercise = False
-
         if cell['cell_type'] == 'code' and last_md_cell_is_exercise:
             remove_answers(cell)
+
+        if cell['cell_type'] == 'markdown':
+            cls = get_cell_class(cell)
+            last_md_cell_is_exercise = cls == 'exercise'
+        else:
+            last_md_cell_is_exercise = False
 
     # Correct resource file paths
     nb_json = json.dumps(nb_data, indent=2)
@@ -31,8 +32,9 @@ def make_unsolved_notebook(nb_file):
 
     # Write modified notebook to parent directory
     path, filename = os.path.split(os.path.abspath(nb_file))
+    filename, _, ext = filename.partition('_solutions')
     parent = os.path.split(path)[0]
-    new_file = os.path.join(parent, filename)
+    new_file = os.path.join(parent, filename + ext)
     with open(new_file, 'w') as f:
         f.write(nb_json)
 
@@ -50,9 +52,16 @@ def update_styles_in_notebook(nb_file):
     for cell in nb_data['cells']:
         if cell['cell_type'] != 'markdown':
             continue
-        tree = get_markdown_xml(cell['source'])
-        set_md_style(tree)
-        cell['source'] = ElementTree.tostring(tree).decode('utf-8')
+
+        try:
+            # check html in markdown cells
+            checker = CellHtmlChecker()
+            checker.feed(''.join(cell['source']))
+
+            # set style of markdown cell based on class
+            set_md_style(cell['source'])
+        except ValueError as e:
+            raise ValueError(f"Error in cell:\n\n{''.join(cell['source'])}") from e
 
     # Overwrite notebook with modified styles 
     nb_json = json.dumps(nb_data, indent=2)
@@ -60,30 +69,76 @@ def update_styles_in_notebook(nb_file):
         f.write(nb_json)
 
 
-def get_markdown_xml(source_lines):
-    """Return xml tree from markdown cell source lines
+class CellHtmlChecker(HTMLParser):
+    """HTML parser that ensures all tags are matched
     """
-    source = ''.join(source_lines)
-    try:
-        return ElementTree.fromstring(source)            
-    except ElementTree.ParseError as e:
-        raise ValueError('Invalid XML in markdown cell:\n\n' + source) from e
+    no_match_tags = ['p', 'li', 'td', 'img', "br", "hr", 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']
+
+    def __init__(self):
+        super().__init__()
+        self.stack = []
+        self.outer_tag = None
+
+    def feed(self, data, check=True):
+        super().feed(data)
+        if check and len(self.stack) > 0:
+            raise ValueError(f'Unclosed tags: {self.stack}')
+
+    def handle_starttag(self, tag, attrs):
+        if tag in self.no_match_tags:
+            return
+        if len(self.stack) == 0:
+            self.outer_tag = tag, attrs
+        self.stack.append(tag)
+
+    def handle_endtag(self, tag):
+        if tag in self.no_match_tags:
+            return
+        if len(self.stack) == 0:
+            raise ValueError(f'Closing tag <{tag}> with no opening tag')
+            
+        last_tag = self.stack.pop()
+        if last_tag != tag:
+            raise ValueError(f'Closing tag <{tag}> while still inside <{last_tag}>')
 
 
-def set_md_style(tree):
+def get_cell_class(cell):
+    """Get class of markdown cell"""
+    parser = CellHtmlChecker()
+    parser.feed(''.join(cell['source']))
+    if parser.outer_tag is None or parser.outer_tag[0] != 'div':
+        raise ValueError('Markdown cell must start with a <div cell=...> tag')
+    tag, attrs = parser.outer_tag
+    attrs = dict(attrs)
+    if 'class' not in attrs:
+        raise ValueError('Markdown cell <div> tag must have class attribute')
+    return attrs['class']
+
+
+def set_md_style(source_lines):
     """Set style of markdown cell based on class"""
     global styles
 
-    if 'class' not in tree.attrib:
-        raise ValueError('Markdown cell opening div must have class attribute')
-    md_class = tree.attrib['class']
+    m = re.match(r'^<div([^>]*)>', source_lines[0])
+    if m is None:
+        raise ValueError('Markdown cell opening line must start with <div class="...">')
+
+    parser = CellHtmlChecker()
+    parser.feed(m.group(0), check=False)
+    tag, attrs = parser.outer_tag
+    attrs = dict(attrs)
+
+    md_class = attrs.get('class', 'default')
     if md_class not in styles:
         raise ValueError('Unknown class in markdown cell: ' + md_class)
-    tree.attrib['style'] = styles[md_class]
+    source_lines[0] = f'<div class="{md_class}" style="{styles[md_class]}">' + source_lines[0][len(m.group(0)):]
 
 
-def adjust_file_paths(text):
-    return re.sub(r'\.\./support_files/', 'support_files/', text)
+def adjust_file_paths(text, parent=True):
+    if parent:
+        return re.sub(r'\.\./support_files/', 'support_files/', text)
+    else:
+        return re.sub(r'\.\./support_files/', '../../support_files/', text)
 
 
 def remove_answers(cell):
@@ -91,8 +146,12 @@ def remove_answers(cell):
     
     Optionally, some starter code may be provided if it ends with "# Your code here:\n"
     """
-    parts = cell['source'].partition('# Your code here:\n')
-    cell['source'] = parts[0] + parts[1]
+    source = ''.join(cell['source'])
+    parts = source.partition('# Your code here:\n')
+    if parts[1] == '':
+        cell['source'] = ''
+    else:
+        cell['source'] = (parts[0] + parts[1]).splitlines(keepends=True)
     cell['outputs'] = []
 
 
@@ -100,8 +159,14 @@ def render_html(nb_file):
     """Render html from notebook file"""
     path, filename = os.path.split(nb_file)
     name, ext = os.path.splitext(filename)
-    html_file = os.path.join(path, 'html', name + '.html')
-    os.system(f'jupyter nbconvert --to html --output-dir {html_file} {nb_file}')
+    html_path = os.path.join(path, 'html')
+    os.system(f'jupyter nbconvert --to html --output-dir {html_path} {nb_file}')
+    html_file = os.path.join(html_path, name + '.html')
+    with open(html_file, 'r') as f:
+        html = f.read()
+    html = adjust_file_paths(html, parent=False)
+    with open(html_file, 'w') as f:
+        f.write(html)
 
 
 def rerun_notebook(nb_file):
@@ -112,26 +177,29 @@ def rerun_notebook(nb_file):
 
 
 def check_notebook_errors(nb_file):
-    """Check for cell outputs that contain an error.
+    """Check for cell outputs that contain an error,
+    unless the last line of the code cell contains "raises an exception"
 
     """
     nb_data = json.load(open(nb_file))
     for cell in nb_data['cells']:
-        if cell['cell_type'] != 'code':
+        if cell['cell_type'] != 'code' or 'raises an exception' in cell['source'][-1].lower():
             continue
         for output in cell['outputs']:
             if output['output_type'] == 'error':
                 raise ValueError(f'Error in cell {cell['execution_count']}: {output['evalue']}')
 
 
-def bake_all_notebooks(path):
+def bake_all_notebooks(nb_files):
     """Bake all notebooks in a directory"""
-    for file in glob.glob(os.path.join(path, "*.ipynb")):
+    for file in nb_files:
         print("Processing", file)
         print("  updating markdown styles")
         update_styles_in_notebook(file)
         print('  rerunning notebook')
         rerun_notebook(file)
+        print('  checking for errors')
+        check_notebook_errors(file)
         print("  making unsolved notebook")
         make_unsolved_notebook(file)
         print("  rendering html")
@@ -170,4 +238,4 @@ if __name__ == '__main__':
     parser.add_argument('files', help='Notebook files to bake', nargs='+')
     args = parser.parse_args()
 
-    bake_all_notebooks(args.path)
+    bake_all_notebooks(args.files)
