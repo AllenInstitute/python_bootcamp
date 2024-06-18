@@ -1,42 +1,33 @@
-import glob
 from html.parser import HTMLParser
-import os, sys, re, argparse, json
+import os, re, argparse, json
+import shutil
 
-from xml.etree import ElementTree
 
+def clean_unsolved_notebook(nb_file):
+    """Modify notebook file for distribution to students
 
-def make_unsolved_notebook(nb_file):
-    """Modify and copy solution notebook file
-
-    1. Remove the answers from exercise cells
-    2. Adjust resource file names to correct path
-    3. Write modified notebook to parent directory
+    1. Remove outputs from code cells
+    2. Remove the answers from exercise cells
     """
     nb_data = json.load(open(nb_file))
 
-    # remove answers from exercise cells
-    last_md_cell_is_exercise = False
-    for cell in nb_data['cells']:
-        if cell['cell_type'] == 'code' and last_md_cell_is_exercise:
-            remove_answers(cell)
+    for i,cell in enumerate(nb_data['cells']):
+        # remove outputs from all code cells
+        if cell['cell_type'] == 'code':
+            remove_output_from_code(cell)
 
+        # remove answers from exercise cells
         if cell['cell_type'] == 'markdown':
             cls = get_cell_class(cell)
-            last_md_cell_is_exercise = cls == 'exercise'
-        else:
-            last_md_cell_is_exercise = False
+            if cls == 'exercise':
+                # we don't know how many solution code cells there are,
+                # so send the entire list of remaining cells to the function
+                # and let it decide how many to clean
+                remove_answers_from_exercise(nb_data['cells'][i+1:])
 
-    # Correct resource file paths
-    nb_json = json.dumps(nb_data, indent=2)
-    nb_json = adjust_file_paths(nb_json)
-
-    # Write modified notebook to parent directory
-    path, filename = os.path.split(os.path.abspath(nb_file))
-    filename, _, ext = filename.partition('_solutions')
-    parent = os.path.split(path)[0]
-    new_file = os.path.join(parent, filename + ext)
-    with open(new_file, 'w') as f:
-        f.write(nb_json)
+    # Write changes back to notebook
+    with open(nb_file, 'w') as fh:
+        json.dump(nb_data, fh, indent=2)
 
 
 def update_styles_in_notebook(nb_file):
@@ -68,6 +59,69 @@ def update_styles_in_notebook(nb_file):
     with open(nb_file, 'w') as f:
         f.write(nb_json)
 
+
+def remove_output_from_code(cell):
+    """Remove outputs from code cell (inplace)"""
+    cell['outputs'] = []
+    cell['metadata'] = {}
+    cell['execution_count'] = None
+
+
+def remove_answers_from_exercise(cells):
+    """Remove answers from the code cell(s) following an exercise markdown cell
+
+    The rules here are:
+    - The exercise markdown cell is followed by 0 or more solution code 
+      cells with no markdown cells in between. Thus, we process only the code cells in 
+      *cells* until the first non-code cell.
+    - Any line in a code cell that starts with "###" marks the beginning or end of the
+      solution code to remove. This may happen multiple times in a single cell. For example::
+
+        # Here is some setup code provided to the student
+        # (we keep this code)
+
+        ### Your code here:
+        # This is the solution code to be removed
+
+        ### Check your results:
+        # We provide some code here to check the student's solution
+        # (we keep this code as well)
+      
+    - Removed code blocks are replaced by 2 empty lines.
+    - If there is only one solution code cell and it does not contain any "###" lines,
+      then all code in that cell is removed (this is so that the vast majority of single-cell
+      solutions don't need to be marked with "###")
+
+    Processed code cells are removed from the list.
+    """
+    code_cells = []
+    while len(cells) > 0 and cells[0]['cell_type'] == 'code':
+        code_cells.append(cells.pop(0))
+
+    # remove solution code between "###" lines
+    saw_marker = False
+    for cell in code_cells:
+        in_solution = False
+        source_lines, cell['source'] = cell['source'], []
+        for line in source_lines:
+            # does this line start a new solution or end the current one?
+            solution_marker = line.startswith('###')
+            if solution_marker:
+                saw_marker = True
+                in_solution = not in_solution
+
+            # Keep only lines that are not part of the solution
+            if not in_solution or solution_marker:
+                cell['source'].append(line)
+
+            # if we just entered a solution, add two blank lines
+            if in_solution and solution_marker:
+                cell['source'].extend(['\n', '\n'])            
+
+    # special case: if there is only one solution cell and no "###" lines, remove all code
+    if not saw_marker and len(code_cells) == 1:
+        code_cells[0]['source'] = []
+    
 
 class CellHtmlChecker(HTMLParser):
     """HTML parser that ensures all tags are matched
@@ -134,25 +188,34 @@ def set_md_style(source_lines):
     source_lines[0] = f'<div class="{md_class}" style="{styles[md_class]}">' + source_lines[0][len(m.group(0)):]
 
 
-def adjust_file_paths(text, parent=True):
-    if parent:
-        return re.sub(r'\.\./support_files/', 'support_files/', text)
-    else:
-        return re.sub(r'\.\./support_files/', '../../support_files/', text)
-
-
-def remove_answers(cell):
-    """Remove answers from exercise code cells
+# def replace(new_filename, old_filename):
+#     """Adjust the file paths in *new_filename* assuming that they were originally
+#     written relative to *old_filename*.
     
-    Optionally, some starter code may be provided if it ends with "# Your code here:\n"
-    """
-    source = ''.join(cell['source'])
-    parts = source.partition('# Your code here:\n')
-    if parts[1] == '':
-        cell['source'] = ''
-    else:
-        cell['source'] = (parts[0] + parts[1]).splitlines(keepends=True)
-    cell['outputs'] = []
+#     Only the paths of files in the support_files directory are adjusted.
+#     """
+#     new_path = os.path.split(new_filename)[0]
+#     old_path = os.path.split(old_filename)[0]
+
+#     text = open(new_filename).read()
+#     with open(new_filename, 'w') as f:
+#         while True:
+#             m = re.match(r'(.*["\'])([^"\']*support_files[^"\']*)(["\'].*)', text, re.DOTALL)
+#             if m is None:
+#                 f.write(text)
+#                 break
+#             pre, old_support_path, post = m.groups()            
+#             new_support_path = os.path.relpath(os.path.join(old_path, old_support_path), new_path)
+#             print(f'  adjusting path: {old_support_path} -> {new_support_path}')
+#             f.write(pre + new_support_path)
+#             text = post
+
+
+def replace(filename, search, replace):
+    text = open(filename).read()
+    text = text.replace(search, replace)
+    with open(filename, 'w') as f:
+        f.write(text)
 
 
 def render_html(nb_file):
@@ -161,15 +224,13 @@ def render_html(nb_file):
     name, ext = os.path.splitext(filename)
     html_path = os.path.join(path, 'html')
     os.system(f'jupyter nbconvert --to html --output-dir {html_path} {nb_file}')
+
+    # adjust support file paths
     html_file = os.path.join(html_path, name + '.html')
-    with open(html_file, 'r') as f:
-        html = f.read()
-    html = adjust_file_paths(html, parent=False)
-    with open(html_file, 'w') as f:
-        f.write(html)
+    replace(html_file, 'support_files', '../support_files')
 
 
-def rerun_notebook(nb_file):
+def run_notebook(nb_file):
     """Rerun notebook to ensure that it is working
     
     The entire notebook is executed regardless of errors."""
@@ -179,7 +240,6 @@ def rerun_notebook(nb_file):
 def check_notebook_errors(nb_file):
     """Check for cell outputs that contain an error,
     unless the last line of the code cell contains "raises an exception"
-
     """
     nb_data = json.load(open(nb_file))
     for cell in nb_data['cells']:
@@ -191,37 +251,66 @@ def check_notebook_errors(nb_file):
 
 
 def bake_all_notebooks(nb_files):
-    """Bake all notebooks in a directory"""
-    for file in nb_files:
-        print("Processing", file)
-        print("  updating markdown styles")
-        update_styles_in_notebook(file)
-        print('  rerunning notebook')
-        rerun_notebook(file)
-        print('  checking for errors')
-        check_notebook_errors(file)
-        print("  making unsolved notebook")
-        make_unsolved_notebook(file)
-        print("  rendering html")
-        render_html(file)
+    """Bake all notebooks in *nb_files* for distribution to students"""
+    for nb_file in nb_files:
+        if not nb_file.endswith('_solutions.ipynb'):
+            raise ValueError(f'Notebook filename must end with "_solutions.ipynb"')
+        path, filename = os.path.split(os.path.abspath(nb_file))
+        filename, _, ext = filename.partition('_solutions')
+        parent = os.path.split(path)[0]
+        unsolved_nb_file = os.path.join(parent, filename + ext)
 
+        print("Processing", nb_file)
+
+        # Update styles in markdown cells then rerun / test the notebook
+        print("  updating markdown styles")
+        update_styles_in_notebook(nb_file)
+
+        # Create unsolved version of the notebook
+        print(f'  creating unsolved notebook {unsolved_nb_file}')
+        shutil.copyfile(nb_file, unsolved_nb_file)
+        # adjust support file paths
+        replace(unsolved_nb_file, '../support_files', 'support_files')
+
+        # test original notebook
+        print('  running solved notebook')
+        run_notebook(nb_file)
+        print('  checking for errors')
+        check_notebook_errors(nb_file)
+
+        # test again on unsolved notebook since we have changed file paths
+        print('  running unsolved notebook')
+        run_notebook(unsolved_nb_file)
+        print('  checking for errors')
+        check_notebook_errors(unsolved_nb_file)
+
+        # remove outputs from code cells and answers from exercise cells
+        print("  cleaning unsolved notebook")
+        clean_unsolved_notebook(unsolved_nb_file)
+
+        # Render html from original solution file
+        print("  rendering html")
+        render_html(nb_file)
 
 
 description = """
 This script modifies notebooks for distribution to students:
 
-- Sanity check html in all markdown cells
-    - Ensure that all markdown cells are valid xml
-    - Require that all markdown cells start with a <div class=...> tag
-- Add styles to all markdown cells based on class
-- Rerun the notebook to ensure that it is working
-- Check for errors in cell outputs
-- Create an unsolved version of the notebook:
-    - Remove the answers from exercise cells
-      (one code cell following each exercise markdown cell; 
-      may contain starter code if it ends with "# Your code here:\\n")
-    - Adjust resource file names to correct path
-- Render original solution files to html
+1. Sanity check html in all markdown cells
+   - Require that all markdown cells start with a <div class=...> tag
+   - Ensure that html tags are matched (to avoid rendering errors)
+2. Add styles to all markdown cells based on the opening <div> tag's class
+   So for example <div class="exercise"> becomes <div class="exercise" style="...">
+3. Rerun the notebook to ensure that it is working
+   - Check for errors in cell outputs
+     (unless the last line of the code cell contains "raises an exception")
+4. Create an unsolved version of the notebook:
+   - Adjust resource file names to correct path
+   - Run this new notebook to ensure it works in its new location
+   - Remove outputs from code cells
+   - Remove the answers from exercise cells
+     (answers are marked by lines starting with "###"; see code for details)
+5. Render original solution files to html
 
 """
 
