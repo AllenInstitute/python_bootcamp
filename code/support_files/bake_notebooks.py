@@ -172,6 +172,10 @@ def get_cell_class(cell):
 def set_md_style(source_lines):
     """Set style of markdown cell based on class"""
     global styles
+    
+    if len(source_lines) == 0:
+        # Cell is empty, nothing to do
+        return
 
     m = re.match(r'^<div([^>]*)>', source_lines[0])
     if m is None:
@@ -247,7 +251,7 @@ def check_notebook_errors(nb_file):
             continue
         for output in cell['outputs']:
             if output['output_type'] == 'error':
-                raise ValueError(f'Error in cell {cell['execution_count']}: {output['evalue']}')
+                raise ValueError(f"Error in cell {cell['execution_count']}: {output['evalue']}")
 
 
 def bake_all_notebooks(nb_files):
