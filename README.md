@@ -1,7 +1,7 @@
-# SWDB_2023
-![SWDB_2023](/code/support_files/images/cropped-SummerWorkshop_Header.png)
+# Allen Institute Python Bootcamp
+![SWDB](/code/support_files/images/cropped-SummerWorkshop_Header.png)
 
-This is the repository for the course materials for the 2023 Summer Workshop on the Dynamic Brain Python Bootcamp.
+This is the repository for the course materials for the Summer Workshop on the Dynamic Brain Python Bootcamp.
 
 # Support Policy
 
