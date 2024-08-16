@@ -9,7 +9,7 @@ def clean_unsolved_notebook(nb_file):
     1. Remove outputs from code cells
     2. Remove the answers from exercise cells
     """
-    nb_data = json.load(open(nb_file))
+    nb_data = json.load(open(nb_file, encoding="utf-8"))
 
     for i,cell in enumerate(nb_data['cells']):
         # remove outputs from all code cells
@@ -26,7 +26,7 @@ def clean_unsolved_notebook(nb_file):
                 remove_answers_from_exercise(nb_data['cells'][i+1:])
 
     # Write changes back to notebook
-    with open(nb_file, 'w') as fh:
+    with open(nb_file, 'w', encoding="utf-8") as fh:
         json.dump(nb_data, fh, indent=2)
 
 
@@ -39,7 +39,7 @@ def update_styles_in_notebook(nb_file):
     We do this because there is not a reliable way to define CSS class
     styles in notebooks; we must manually set the style of each cell.
     """
-    nb_data = json.load(open(nb_file))
+    nb_data = json.load(open(nb_file, encoding="utf-8"))
     for cell in nb_data['cells']:
         if cell['cell_type'] != 'markdown':
             continue
@@ -56,7 +56,7 @@ def update_styles_in_notebook(nb_file):
 
     # Overwrite notebook with modified styles 
     nb_json = json.dumps(nb_data, indent=2)
-    with open(nb_file, 'w') as f:
+    with open(nb_file, 'w', encoding="utf-8") as f:
         f.write(nb_json)
 
 
@@ -172,6 +172,10 @@ def get_cell_class(cell):
 def set_md_style(source_lines):
     """Set style of markdown cell based on class"""
     global styles
+    
+    if len(source_lines) == 0:
+        # Cell is empty, nothing to do
+        return
 
     m = re.match(r'^<div([^>]*)>', source_lines[0])
     if m is None:
@@ -197,8 +201,8 @@ def set_md_style(source_lines):
 #     new_path = os.path.split(new_filename)[0]
 #     old_path = os.path.split(old_filename)[0]
 
-#     text = open(new_filename).read()
-#     with open(new_filename, 'w') as f:
+#     text = open(new_filename, encoding="utf-8").read()
+#     with open(new_filename, 'w', encoding="utf-8") as f:
 #         while True:
 #             m = re.match(r'(.*["\'])([^"\']*support_files[^"\']*)(["\'].*)', text, re.DOTALL)
 #             if m is None:
@@ -212,9 +216,9 @@ def set_md_style(source_lines):
 
 
 def replace(filename, search, replace):
-    text = open(filename).read()
+    text = open(filename, encoding="utf-8").read()
     text = text.replace(search, replace)
-    with open(filename, 'w') as f:
+    with open(filename, 'w', encoding="utf-8") as f:
         f.write(text)
 
 
@@ -241,13 +245,13 @@ def check_notebook_errors(nb_file):
     """Check for cell outputs that contain an error,
     unless the last line of the code cell contains "raises an exception"
     """
-    nb_data = json.load(open(nb_file))
+    nb_data = json.load(open(nb_file, encoding="utf-8"))
     for cell in nb_data['cells']:
         if cell['cell_type'] != 'code' or 'raises an exception' in cell['source'][-1].lower():
             continue
         for output in cell['outputs']:
             if output['output_type'] == 'error':
-                raise ValueError(f'Error in cell {cell['execution_count']}: {output['evalue']}')
+                raise ValueError(f"Error in cell {cell['execution_count']}: {output['evalue']}")
 
 
 def bake_all_notebooks(nb_files):
