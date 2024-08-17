@@ -7331,7 +7331,8 @@ a.anchor-link {
     if (!diagrams.length) {
       return;
     }
-    const mermaid = (await import("https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.2.3/mermaid.esm.min.mjs")).default;
+    const mermaid = (await import("https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.0/mermaid.esm.min.mjs")).default;
+    const parser = new DOMParser();
 
     mermaid.initialize({
       maxTextSize: 100000,
@@ -7347,39 +7348,52 @@ a.anchor-link {
     let _nextMermaidId = 0;
 
     function makeMermaidImage(svg) {
-      const img = document.createElement('img');
-      const maxWidth = svg.match(/max-width: (\d+)/);
-      if (maxWidth && maxWidth[1]) {
-        const width = parseInt(maxWidth[1]);
-        if (width && !Number.isNaN(width) && Number.isFinite(width)) {
-          img.width = width;
-        }
+      const img = document.createElement("img");
+      const doc = parser.parseFromString(svg, "image/svg+xml");
+      const svgEl = doc.querySelector("svg");
+      const { maxWidth } = svgEl?.style || {};
+      const firstTitle = doc.querySelector("title");
+      const firstDesc = doc.querySelector("desc");
+
+      img.setAttribute("src", `data:image/svg+xml,${encodeURIComponent(svg)}`);
+      if (maxWidth) {
+        img.width = parseInt(maxWidth);
       }
-      img.setAttribute('src', `data:image/svg+xml,${encodeURIComponent(svg)}`);
-      return img;
+      if (firstTitle) {
+        img.setAttribute("alt", firstTitle.textContent);
+      }
+      if (firstDesc) {
+        const caption = document.createElement("figcaption");
+        caption.className = "sr-only";
+        caption.textContent = firstDesc.textContent;
+        return [img, caption];
+      }
+      return [img];
     }
 
     async function makeMermaidError(text) {
-      let errorMessage = '';
+      let errorMessage = "";
       try {
         await mermaid.parse(text);
       } catch (err) {
         errorMessage = `${err}`;
       }
 
-      const result = document.createElement('details');
-      const summary = document.createElement('summary');
-      const pre = document.createElement('pre');
-      const code = document.createElement('code');
+      const result = document.createElement("details");
+      result.className = 'jp-RenderedMermaid-Details';
+      const summary = document.createElement("summary");
+      summary.className = 'jp-RenderedMermaid-Summary';
+      const pre = document.createElement("pre");
+      const code = document.createElement("code");
       code.innerText = text;
       pre.appendChild(code);
       summary.appendChild(pre);
       result.appendChild(summary);
 
-      const warning = document.createElement('pre');
+      const warning = document.createElement("pre");
       warning.innerText = errorMessage;
       result.appendChild(warning);
-      return result;
+      return [result];
     }
 
     async function renderOneMarmaid(src) {
@@ -7389,30 +7403,41 @@ a.anchor-link {
       const el = document.createElement("div");
       el.style.visibility = "hidden";
       document.body.appendChild(el);
-      let result = null;
+      let results = null;
+      let output = null;
       try {
         const { svg } = await mermaid.render(id, raw, el);
-        result = makeMermaidImage(svg);
+        results = makeMermaidImage(svg);
+        output = document.createElement("figure");
+        results.map(output.appendChild, output);
       } catch (err) {
         parent.classList.add("jp-mod-warning");
-        result = await makeMermaidError(raw);
+        results = await makeMermaidError(raw);
+        output = results[0];
       } finally {
         el.remove();
       }
       parent.classList.add("jp-RenderedMermaid");
-      parent.appendChild(result);
+      parent.appendChild(output);
     }
 
     void Promise.all([...diagrams].map(renderOneMarmaid));
   });
 </script>
 <style>
-  .jp-RenderedMarkdown .jp-Mermaid:not(.jp-RenderedMermaid) {
+  .jp-Mermaid:not(.jp-RenderedMermaid) {
     display: none;
   }
-  .jp-RenderedMarkdown .jp-RenderedMermaid.jp-mod-warning {
+
+  .jp-RenderedMermaid {
+    overflow: auto;
+    display: flex;
+  }
+
+  .jp-RenderedMermaid.jp-mod-warning {
     width: auto;
-    padding: 10px;
+    padding: 0.5em;
+    margin-top: 0.5em;
     border: var(--jp-border-width) solid var(--jp-warn-color2);
     border-radius: var(--jp-border-radius);
     color: var(--jp-ui-font-color1);
@@ -7420,17 +7445,32 @@ a.anchor-link {
     white-space: pre-wrap;
     word-wrap: break-word;
   }
-  .jp-RenderedMarkdown .jp-RenderedMermaid.jp-mod-warning details > pre {
+
+  .jp-RenderedMermaid figure {
+    margin: 0;
+    overflow: auto;
+    max-width: 100%;
+  }
+
+  .jp-RenderedMermaid img {
+    max-width: 100%;
+  }
+
+  .jp-RenderedMermaid-Details > pre {
     margin-top: 1em;
   }
-  .jp-RenderedMarkdown .jp-RenderedMermaid.jp-mod-warning summary {
+
+  .jp-RenderedMermaid-Summary {
     color: var(--jp-warn-color2);
   }
-  .jp-RenderedMarkdown .jp-RenderedMermaid.jp-mod-warning summary > pre {
-    display: inline-block;
-  }
-  .jp-RenderedMermaid > .mermaid {
+
+  .jp-RenderedMermaid:not(.jp-mod-warning) pre {
     display: none;
+  }
+
+  .jp-RenderedMermaid-Summary > pre {
+    display: inline-block;
+    white-space: normal;
   }
 </style>
 <!-- End of mermaid configuration --></head>
@@ -7442,23 +7482,10 @@ a.anchor-link {
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<img alt="No description has been provided for this image" src="../support_files/images/cropped-SummerWorkshop_Header.png"/>
-</div>
-</div>
-</div>
-</div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
-<div class="jp-Cell-inputWrapper" tabindex="0">
-<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
-</div>
-<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
-</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<div style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; ">
+<div class="default" style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; color: #000;">
 <center><h1>Importing Modules</h1></center>
 <p>When you first start up a Python interpreter (or a new Jupyter notebook), there is only a limited set of commands and objects available for you to work with. To extend this functionality, there is a vast collection of tools that extend the functionality of Python, but that must be explicitly <i>imported</i> to make them available.
-
 <p>This is in contrast to tools like MATLAB, Igor, and R, which implicitly provide access to a larger array of functionality. This is a reflection of the fact that Python is a general-purpose language; whereas MATLAB assumes the user is interested in linear algebra, Python tries to make no assumptions about what functionality we will need.
-
 </p></p></div>
 </div>
 </div>
@@ -7470,21 +7497,18 @@ a.anchor-link {
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<div style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; ">
+<div class="default" style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; color: #000;">
 <h2>Libraries</h2>
-<p>Python itself comes with a large number of handy standard libraries that can be imported and used:  
-
+<p>Python itself comes with a large number of handy standard libraries that can be imported and used:
 <p><a href="https://docs.python.org/3.7/library/">Python Standard Library</a></p>
-<p>However, the real power of Python for <i>scientific computing</i> comes from the wealth of open-source, community driven packages that are available. Many of these popular external packages com bundled with the Anaconda Python distribution. Here's a full list of the packages that come with Anaconda: 
-
-<p><a href="https://docs.anaconda.com/free/anaconda/reference/packages/pkg-docs/">Anaconda package lists</a></p>
-<p>To help prepare you for the Summer Workshop on the Dynamic Brain, we are going to focus on several commonly used and extremely powerful scientific computing libraries:
+<p>However, the real power of Python for <i>scientific computing</i> comes from the wealth of open-source, community driven packages that are available. Many of these external packages come bundled with the Anaconda Python distribution.
+<p>To help prepare you for the Summer Workshop on the Dynamic Brain, we are going to focus on several popular and powerful scientific computing libraries:
 <ul>
-<li>Numpy - Matrix manipulation and optimized mathematical functions (<a href="http://www.numpy.org/">http://www.numpy.org</a>)
-<li>Scipy - A suite of powerful scientific modules that extends on Numpy's functionality (<a href="http://docs.scipy.org/doc/scipy/reference/">http://docs.scipy.org/doc/scipy/reference/</a>)
-<li>Matplotlib - A python 2D plotting library that produces publication quality figures (<a href="http://matplotlib.org/">http://matplotlib.org/</a>)
+<li>Numpy - Efficient numerical arrays, linear algebra, and optimized mathematical functions (<a href="http://www.numpy.org/">http://www.numpy.org</a>)
+<li>Scipy - A suite of powerful scientific modules that extends on Numpy's functionality, providing signal and image processing, statistical tools, optimization, interpolation, and more (<a href="http://docs.scipy.org/doc/scipy/reference/">http://docs.scipy.org/doc/scipy/reference/</a>)
+<li>Matplotlib - A 2D plotting library that produces publication quality figures (<a href="http://matplotlib.org/">http://matplotlib.org/</a>)
 <li>Scikit-learn - Easy to use machine learning (<a href="https://scikit-learn.org/">https://scikit-learn.org</a>)
-<li>Pandas - A high-performance library for data manipulation and analysis (<a href="http://pandas.pydata.org/">http://pandas.pydata.org/</a>)
+<li>Pandas - A library for manipulation of tabular, relational data (<a href="http://pandas.pydata.org/">http://pandas.pydata.org/</a>)
 </li></li></li></li></li></ul>
 </p></p></p></div>
 </div>
@@ -7497,10 +7521,9 @@ a.anchor-link {
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<div style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; ">
+<div class="default" style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; color: #000;">
 <h2>Packages and Modules</h2>
 <p>Before we get into the details of these packages, we need some definitions:
-
 <p><b>Module:</b>
 <ol>
 <li>A file that contains the code defining a set of python functions, classes, and data.
@@ -7522,9 +7545,8 @@ a.anchor-link {
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<div style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; ">
+<div class="default" style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; color: #000;">
 <p>Let's start by importing numpy. This is one of the most important libraries in the scientific Python stack; we will explore it in detail in the next section.
-
 </p></div>
 </div>
 </div>
@@ -7550,7 +7572,7 @@ a.anchor-link {
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<div style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; ">
+<div class="default" style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; color: #000;">
 <p>This statement did two things:
 <ol>
 <li>Created a new module object by loading the "numpy" module
@@ -7581,7 +7603,7 @@ a.anchor-link {
 <div class="jp-OutputArea-child jp-OutputArea-executeResult">
 <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[2]:</div>
 <div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain" tabindex="0">
-<pre>&lt;module 'numpy' from '/opt/conda/lib/python3.10/site-packages/numpy/__init__.py'&gt;</pre>
+<pre>&lt;module 'numpy' from '/home/luke/miniconda3/envs/swdb/lib/python3.12/site-packages/numpy/__init__.py'&gt;</pre>
 </div>
 </div>
 </div>
@@ -7593,9 +7615,8 @@ a.anchor-link {
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<div style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; ">
+<div class="default" style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; color: #000;">
 <p>The functionality contained within this module are accessed as <i>attributes</i>:
-
 </p></div>
 </div>
 </div>
@@ -7633,9 +7654,8 @@ a.anchor-link {
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<div style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; ">
+<div class="default" style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; color: #000;">
 <p>Numpy is a large library. Let's use the <code>dir</code> function, which you learned earlier, to view all of the available methods.
-
 </p></div>
 </div>
 </div>
@@ -7661,7 +7681,7 @@ a.anchor-link {
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain" tabindex="0">
-<pre>['ALLOW_THREADS', 'AxisError', 'BUFSIZE', 'CLIP', 'ComplexWarning', 'DataSource', 'ERR_CALL', 'ERR_DEFAULT', 'ERR_IGNORE', 'ERR_LOG', 'ERR_PRINT', 'ERR_RAISE', 'ERR_WARN', 'FLOATING_POINT_SUPPORT', 'FPE_DIVIDEBYZERO', 'FPE_INVALID', 'FPE_OVERFLOW', 'FPE_UNDERFLOW', 'False_', 'Inf', 'Infinity', 'MAXDIMS', 'MAY_SHARE_BOUNDS', 'MAY_SHARE_EXACT', 'ModuleDeprecationWarning', 'NAN', 'NINF', 'NZERO', 'NaN', 'PINF', 'PZERO', 'RAISE', 'RankWarning', 'SHIFT_DIVIDEBYZERO', 'SHIFT_INVALID', 'SHIFT_OVERFLOW', 'SHIFT_UNDERFLOW', 'ScalarType', 'Tester', 'TooHardError', 'True_', 'UFUNC_BUFSIZE_DEFAULT', 'UFUNC_PYVALS_NAME', 'VisibleDeprecationWarning', 'WRAP', '_CopyMode', '_NoValue', '_UFUNC_API', '__NUMPY_SETUP__', '__all__', '__builtins__', '__cached__', '__config__', '__deprecated_attrs__', '__dir__', '__doc__', '__expired_functions__', '__file__', '__future_scalars__', '__getattr__', '__git_version__', '__loader__', '__name__', '__package__', '__path__', '__spec__', '__version__', '_add_newdoc_ufunc', '_distributor_init', '_financial_names', '_get_promotion_state', '_globals', '_mat', '_no_nep50_warning', '_pyinstaller_hooks_dir', '_pytesttester', '_set_promotion_state', '_version', 'abs', 'absolute', 'add', 'add_docstring', 'add_newdoc', 'add_newdoc_ufunc', 'all', 'allclose', 'alltrue', 'amax', 'amin', 'angle', 'any', 'append', 'apply_along_axis', 'apply_over_axes', 'arange', 'arccos', 'arccosh', 'arcsin', 'arcsinh', 'arctan', 'arctan2', 'arctanh', 'argmax', 'argmin', 'argpartition', 'argsort', 'argwhere', 'around', 'array', 'array2string', 'array_equal', 'array_equiv', 'array_repr', 'array_split', 'array_str', 'asanyarray', 'asarray', 'asarray_chkfinite', 'ascontiguousarray', 'asfarray', 'asfortranarray', 'asmatrix', 'atleast_1d', 'atleast_2d', 'atleast_3d', 'average', 'bartlett', 'base_repr', 'binary_repr', 'bincount', 'bitwise_and', 'bitwise_not', 'bitwise_or', 'bitwise_xor', 'blackman', 'block', 'bmat', 'bool_', 'broadcast', 'broadcast_arrays', 'broadcast_shapes', 'broadcast_to', 'busday_count', 'busday_offset', 'busdaycalendar', 'byte', 'byte_bounds', 'bytes_', 'c_', 'can_cast', 'cast', 'cbrt', 'cdouble', 'ceil', 'cfloat', 'char', 'character', 'chararray', 'choose', 'clip', 'clongdouble', 'clongfloat', 'column_stack', 'common_type', 'compare_chararrays', 'compat', 'complex128', 'complex256', 'complex64', 'complex_', 'complexfloating', 'compress', 'concatenate', 'conj', 'conjugate', 'convolve', 'copy', 'copysign', 'copyto', 'corrcoef', 'correlate', 'cos', 'cosh', 'count_nonzero', 'cov', 'cross', 'csingle', 'ctypeslib', 'cumprod', 'cumproduct', 'cumsum', 'datetime64', 'datetime_as_string', 'datetime_data', 'deg2rad', 'degrees', 'delete', 'deprecate', 'deprecate_with_doc', 'diag', 'diag_indices', 'diag_indices_from', 'diagflat', 'diagonal', 'diff', 'digitize', 'disp', 'divide', 'divmod', 'dot', 'double', 'dsplit', 'dstack', 'dtype', 'e', 'ediff1d', 'einsum', 'einsum_path', 'emath', 'empty', 'empty_like', 'equal', 'errstate', 'euler_gamma', 'exp', 'exp2', 'expand_dims', 'expm1', 'extract', 'eye', 'fabs', 'fastCopyAndTranspose', 'fft', 'fill_diagonal', 'find_common_type', 'finfo', 'fix', 'flatiter', 'flatnonzero', 'flexible', 'flip', 'fliplr', 'flipud', 'float128', 'float16', 'float32', 'float64', 'float_', 'float_power', 'floating', 'floor', 'floor_divide', 'fmax', 'fmin', 'fmod', 'format_float_positional', 'format_float_scientific', 'format_parser', 'frexp', 'from_dlpack', 'frombuffer', 'fromfile', 'fromfunction', 'fromiter', 'frompyfunc', 'fromregex', 'fromstring', 'full', 'full_like', 'gcd', 'generic', 'genfromtxt', 'geomspace', 'get_array_wrap', 'get_include', 'get_printoptions', 'getbufsize', 'geterr', 'geterrcall', 'geterrobj', 'gradient', 'greater', 'greater_equal', 'half', 'hamming', 'hanning', 'heaviside', 'histogram', 'histogram2d', 'histogram_bin_edges', 'histogramdd', 'hsplit', 'hstack', 'hypot', 'i0', 'identity', 'iinfo', 'imag', 'in1d', 'index_exp', 'indices', 'inexact', 'inf', 'info', 'infty', 'inner', 'insert', 'int16', 'int32', 'int64', 'int8', 'int_', 'intc', 'integer', 'interp', 'intersect1d', 'intp', 'invert', 'is_busday', 'isclose', 'iscomplex', 'iscomplexobj', 'isfinite', 'isfortran', 'isin', 'isinf', 'isnan', 'isnat', 'isneginf', 'isposinf', 'isreal', 'isrealobj', 'isscalar', 'issctype', 'issubclass_', 'issubdtype', 'issubsctype', 'iterable', 'ix_', 'kaiser', 'kernel_version', 'kron', 'lcm', 'ldexp', 'left_shift', 'less', 'less_equal', 'lexsort', 'lib', 'linalg', 'linspace', 'little_endian', 'load', 'loadtxt', 'log', 'log10', 'log1p', 'log2', 'logaddexp', 'logaddexp2', 'logical_and', 'logical_not', 'logical_or', 'logical_xor', 'logspace', 'longcomplex', 'longdouble', 'longfloat', 'longlong', 'lookfor', 'ma', 'mask_indices', 'mat', 'math', 'matmul', 'matrix', 'max', 'maximum', 'maximum_sctype', 'may_share_memory', 'mean', 'median', 'memmap', 'meshgrid', 'mgrid', 'min', 'min_scalar_type', 'minimum', 'mintypecode', 'mod', 'modf', 'moveaxis', 'msort', 'multiply', 'nan', 'nan_to_num', 'nanargmax', 'nanargmin', 'nancumprod', 'nancumsum', 'nanmax', 'nanmean', 'nanmedian', 'nanmin', 'nanpercentile', 'nanprod', 'nanquantile', 'nanstd', 'nansum', 'nanvar', 'nbytes', 'ndarray', 'ndenumerate', 'ndim', 'ndindex', 'nditer', 'negative', 'nested_iters', 'newaxis', 'nextafter', 'nonzero', 'not_equal', 'numarray', 'number', 'obj2sctype', 'object_', 'ogrid', 'oldnumeric', 'ones', 'ones_like', 'outer', 'packbits', 'pad', 'partition', 'percentile', 'pi', 'piecewise', 'place', 'poly', 'poly1d', 'polyadd', 'polyder', 'polydiv', 'polyfit', 'polyint', 'polymul', 'polynomial', 'polysub', 'polyval', 'positive', 'power', 'printoptions', 'prod', 'product', 'promote_types', 'ptp', 'put', 'put_along_axis', 'putmask', 'quantile', 'r_', 'rad2deg', 'radians', 'random', 'ravel', 'ravel_multi_index', 'real', 'real_if_close', 'rec', 'recarray', 'recfromcsv', 'recfromtxt', 'reciprocal', 'record', 'remainder', 'repeat', 'require', 'reshape', 'resize', 'result_type', 'right_shift', 'rint', 'roll', 'rollaxis', 'roots', 'rot90', 'round', 'round_', 'row_stack', 's_', 'safe_eval', 'save', 'savetxt', 'savez', 'savez_compressed', 'sctype2char', 'sctypeDict', 'sctypes', 'searchsorted', 'select', 'set_numeric_ops', 'set_printoptions', 'set_string_function', 'setbufsize', 'setdiff1d', 'seterr', 'seterrcall', 'seterrobj', 'setxor1d', 'shape', 'shares_memory', 'short', 'show_config', 'show_runtime', 'sign', 'signbit', 'signedinteger', 'sin', 'sinc', 'single', 'singlecomplex', 'sinh', 'size', 'sometrue', 'sort', 'sort_complex', 'source', 'spacing', 'split', 'sqrt', 'square', 'squeeze', 'stack', 'std', 'str_', 'string_', 'subtract', 'sum', 'swapaxes', 'take', 'take_along_axis', 'tan', 'tanh', 'tensordot', 'test', 'testing', 'tile', 'timedelta64', 'trace', 'tracemalloc_domain', 'transpose', 'trapz', 'tri', 'tril', 'tril_indices', 'tril_indices_from', 'trim_zeros', 'triu', 'triu_indices', 'triu_indices_from', 'true_divide', 'trunc', 'typecodes', 'typename', 'ubyte', 'ufunc', 'uint', 'uint16', 'uint32', 'uint64', 'uint8', 'uintc', 'uintp', 'ulonglong', 'unicode_', 'union1d', 'unique', 'unpackbits', 'unravel_index', 'unsignedinteger', 'unwrap', 'use_hugepage', 'ushort', 'vander', 'var', 'vdot', 'vectorize', 'version', 'void', 'vsplit', 'vstack', 'where', 'who', 'zeros', 'zeros_like']
+<pre>['ALLOW_THREADS', 'BUFSIZE', 'CLIP', 'DataSource', 'ERR_CALL', 'ERR_DEFAULT', 'ERR_IGNORE', 'ERR_LOG', 'ERR_PRINT', 'ERR_RAISE', 'ERR_WARN', 'FLOATING_POINT_SUPPORT', 'FPE_DIVIDEBYZERO', 'FPE_INVALID', 'FPE_OVERFLOW', 'FPE_UNDERFLOW', 'False_', 'Inf', 'Infinity', 'MAXDIMS', 'MAY_SHARE_BOUNDS', 'MAY_SHARE_EXACT', 'NAN', 'NINF', 'NZERO', 'NaN', 'PINF', 'PZERO', 'RAISE', 'RankWarning', 'SHIFT_DIVIDEBYZERO', 'SHIFT_INVALID', 'SHIFT_OVERFLOW', 'SHIFT_UNDERFLOW', 'ScalarType', 'True_', 'UFUNC_BUFSIZE_DEFAULT', 'UFUNC_PYVALS_NAME', 'WRAP', '_CopyMode', '_NoValue', '_UFUNC_API', '__NUMPY_SETUP__', '__all__', '__builtins__', '__cached__', '__config__', '__deprecated_attrs__', '__dir__', '__doc__', '__expired_functions__', '__file__', '__former_attrs__', '__future_scalars__', '__getattr__', '__loader__', '__name__', '__package__', '__path__', '__spec__', '__version__', '_add_newdoc_ufunc', '_builtins', '_distributor_init', '_financial_names', '_get_promotion_state', '_globals', '_int_extended_msg', '_mat', '_no_nep50_warning', '_pyinstaller_hooks_dir', '_pytesttester', '_set_promotion_state', '_specific_msg', '_typing', '_using_numpy2_behavior', '_utils', 'abs', 'absolute', 'add', 'add_docstring', 'add_newdoc', 'add_newdoc_ufunc', 'all', 'allclose', 'alltrue', 'amax', 'amin', 'angle', 'any', 'append', 'apply_along_axis', 'apply_over_axes', 'arange', 'arccos', 'arccosh', 'arcsin', 'arcsinh', 'arctan', 'arctan2', 'arctanh', 'argmax', 'argmin', 'argpartition', 'argsort', 'argwhere', 'around', 'array', 'array2string', 'array_equal', 'array_equiv', 'array_repr', 'array_split', 'array_str', 'asanyarray', 'asarray', 'asarray_chkfinite', 'ascontiguousarray', 'asfarray', 'asfortranarray', 'asmatrix', 'atleast_1d', 'atleast_2d', 'atleast_3d', 'average', 'bartlett', 'base_repr', 'binary_repr', 'bincount', 'bitwise_and', 'bitwise_not', 'bitwise_or', 'bitwise_xor', 'blackman', 'block', 'bmat', 'bool_', 'broadcast', 'broadcast_arrays', 'broadcast_shapes', 'broadcast_to', 'busday_count', 'busday_offset', 'busdaycalendar', 'byte', 'byte_bounds', 'bytes_', 'c_', 'can_cast', 'cast', 'cbrt', 'cdouble', 'ceil', 'cfloat', 'char', 'character', 'chararray', 'choose', 'clip', 'clongdouble', 'clongfloat', 'column_stack', 'common_type', 'compare_chararrays', 'compat', 'complex128', 'complex256', 'complex64', 'complex_', 'complexfloating', 'compress', 'concatenate', 'conj', 'conjugate', 'convolve', 'copy', 'copysign', 'copyto', 'corrcoef', 'correlate', 'cos', 'cosh', 'count_nonzero', 'cov', 'cross', 'csingle', 'ctypeslib', 'cumprod', 'cumproduct', 'cumsum', 'datetime64', 'datetime_as_string', 'datetime_data', 'deg2rad', 'degrees', 'delete', 'deprecate', 'deprecate_with_doc', 'diag', 'diag_indices', 'diag_indices_from', 'diagflat', 'diagonal', 'diff', 'digitize', 'disp', 'divide', 'divmod', 'dot', 'double', 'dsplit', 'dstack', 'dtype', 'dtypes', 'e', 'ediff1d', 'einsum', 'einsum_path', 'emath', 'empty', 'empty_like', 'equal', 'errstate', 'euler_gamma', 'exceptions', 'exp', 'exp2', 'expand_dims', 'expm1', 'extract', 'eye', 'fabs', 'fastCopyAndTranspose', 'fft', 'fill_diagonal', 'find_common_type', 'finfo', 'fix', 'flatiter', 'flatnonzero', 'flexible', 'flip', 'fliplr', 'flipud', 'float128', 'float16', 'float32', 'float64', 'float_', 'float_power', 'floating', 'floor', 'floor_divide', 'fmax', 'fmin', 'fmod', 'format_float_positional', 'format_float_scientific', 'format_parser', 'frexp', 'from_dlpack', 'frombuffer', 'fromfile', 'fromfunction', 'fromiter', 'frompyfunc', 'fromregex', 'fromstring', 'full', 'full_like', 'gcd', 'generic', 'genfromtxt', 'geomspace', 'get_array_wrap', 'get_include', 'get_printoptions', 'getbufsize', 'geterr', 'geterrcall', 'geterrobj', 'gradient', 'greater', 'greater_equal', 'half', 'hamming', 'hanning', 'heaviside', 'histogram', 'histogram2d', 'histogram_bin_edges', 'histogramdd', 'hsplit', 'hstack', 'hypot', 'i0', 'identity', 'iinfo', 'imag', 'in1d', 'index_exp', 'indices', 'inexact', 'inf', 'info', 'infty', 'inner', 'insert', 'int16', 'int32', 'int64', 'int8', 'int_', 'intc', 'integer', 'interp', 'intersect1d', 'intp', 'invert', 'is_busday', 'isclose', 'iscomplex', 'iscomplexobj', 'isfinite', 'isfortran', 'isin', 'isinf', 'isnan', 'isnat', 'isneginf', 'isposinf', 'isreal', 'isrealobj', 'isscalar', 'issctype', 'issubclass_', 'issubdtype', 'issubsctype', 'iterable', 'ix_', 'kaiser', 'kernel_version', 'kron', 'lcm', 'ldexp', 'left_shift', 'less', 'less_equal', 'lexsort', 'lib', 'linalg', 'linspace', 'little_endian', 'load', 'loadtxt', 'log', 'log10', 'log1p', 'log2', 'logaddexp', 'logaddexp2', 'logical_and', 'logical_not', 'logical_or', 'logical_xor', 'logspace', 'longcomplex', 'longdouble', 'longfloat', 'longlong', 'lookfor', 'ma', 'mask_indices', 'mat', 'matmul', 'matrix', 'max', 'maximum', 'maximum_sctype', 'may_share_memory', 'mean', 'median', 'memmap', 'meshgrid', 'mgrid', 'min', 'min_scalar_type', 'minimum', 'mintypecode', 'mod', 'modf', 'moveaxis', 'msort', 'multiply', 'nan', 'nan_to_num', 'nanargmax', 'nanargmin', 'nancumprod', 'nancumsum', 'nanmax', 'nanmean', 'nanmedian', 'nanmin', 'nanpercentile', 'nanprod', 'nanquantile', 'nanstd', 'nansum', 'nanvar', 'nbytes', 'ndarray', 'ndenumerate', 'ndim', 'ndindex', 'nditer', 'negative', 'nested_iters', 'newaxis', 'nextafter', 'nonzero', 'not_equal', 'numarray', 'number', 'obj2sctype', 'object_', 'ogrid', 'oldnumeric', 'ones', 'ones_like', 'outer', 'packbits', 'pad', 'partition', 'percentile', 'pi', 'piecewise', 'place', 'poly', 'poly1d', 'polyadd', 'polyder', 'polydiv', 'polyfit', 'polyint', 'polymul', 'polynomial', 'polysub', 'polyval', 'positive', 'power', 'printoptions', 'prod', 'product', 'promote_types', 'ptp', 'put', 'put_along_axis', 'putmask', 'quantile', 'r_', 'rad2deg', 'radians', 'random', 'ravel', 'ravel_multi_index', 'real', 'real_if_close', 'rec', 'recarray', 'recfromcsv', 'recfromtxt', 'reciprocal', 'record', 'remainder', 'repeat', 'require', 'reshape', 'resize', 'result_type', 'right_shift', 'rint', 'roll', 'rollaxis', 'roots', 'rot90', 'round', 'round_', 'row_stack', 's_', 'safe_eval', 'save', 'savetxt', 'savez', 'savez_compressed', 'sctype2char', 'sctypeDict', 'sctypes', 'searchsorted', 'select', 'set_numeric_ops', 'set_printoptions', 'set_string_function', 'setbufsize', 'setdiff1d', 'seterr', 'seterrcall', 'seterrobj', 'setxor1d', 'shape', 'shares_memory', 'short', 'show_config', 'show_runtime', 'sign', 'signbit', 'signedinteger', 'sin', 'sinc', 'single', 'singlecomplex', 'sinh', 'size', 'sometrue', 'sort', 'sort_complex', 'source', 'spacing', 'split', 'sqrt', 'square', 'squeeze', 'stack', 'std', 'str_', 'string_', 'subtract', 'sum', 'swapaxes', 'take', 'take_along_axis', 'tan', 'tanh', 'tensordot', 'test', 'testing', 'tile', 'timedelta64', 'trace', 'tracemalloc_domain', 'transpose', 'trapz', 'tri', 'tril', 'tril_indices', 'tril_indices_from', 'trim_zeros', 'triu', 'triu_indices', 'triu_indices_from', 'true_divide', 'trunc', 'typecodes', 'typename', 'ubyte', 'ufunc', 'uint', 'uint16', 'uint32', 'uint64', 'uint8', 'uintc', 'uintp', 'ulonglong', 'unicode_', 'union1d', 'unique', 'unpackbits', 'unravel_index', 'unsignedinteger', 'unwrap', 'ushort', 'vander', 'var', 'vdot', 'vectorize', 'version', 'void', 'vsplit', 'vstack', 'where', 'who', 'zeros', 'zeros_like']
 </pre>
 </div>
 </div>
@@ -7674,9 +7694,8 @@ a.anchor-link {
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<div style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; ">
+<div class="default" style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; color: #000;">
 <p>We can also use the <code>dir</code> command without an argument to see what's in our notebook's global 'namespace':
-
 </p></div>
 </div>
 </div>
@@ -7702,7 +7721,7 @@ a.anchor-link {
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain" tabindex="0">
-<pre>['In', 'Out', '_', '_2', '_3', '__', '___', '__builtin__', '__builtins__', '__doc__', '__loader__', '__name__', '__package__', '__session__', '__spec__', '_dh', '_i', '_i1', '_i2', '_i3', '_i4', '_i5', '_ih', '_ii', '_iii', '_oh', 'exit', 'get_ipython', 'numpy', 'open', 'quit']
+<pre>['In', 'Out', '_', '_2', '_3', '__', '___', '__builtin__', '__builtins__', '__doc__', '__loader__', '__name__', '__package__', '__spec__', '_dh', '_i', '_i1', '_i2', '_i3', '_i4', '_i5', '_ih', '_ii', '_iii', '_oh', 'exit', 'get_ipython', 'numpy', 'open', 'quit']
 </pre>
 </div>
 </div>
@@ -7715,9 +7734,8 @@ a.anchor-link {
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<div style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; ">
+<div class="default" style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; color: #000;">
 <p>Most of these are behind-the-scenes variables that your kernel is using to keep track of command history or other low-level attributes.
-
 <p>At this point, the only variable we've actually declared is <code>numpy</code>
 </p></p></div>
 </div>
@@ -7730,10 +7748,9 @@ a.anchor-link {
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<div style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; ">
+<div class="default" style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; color: #000;">
 <p><b>Importing specific functions from a module</b>
 <p>Another importing option is to import the specific functions that you need from a libary
-
 </p></p></div>
 </div>
 </div>
@@ -7759,9 +7776,8 @@ a.anchor-link {
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<div style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; ">
+<div class="default" style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; color: #000;">
 <p>Note that, if we now look at the global namespace using <code>dir</code>, the two names that we've just imported are now visible, which means that they're globally accessible.
-
 </p></div>
 </div>
 </div>
@@ -7787,7 +7803,7 @@ a.anchor-link {
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain" tabindex="0">
-<pre>['In', 'Out', '_', '_2', '_3', '__', '___', '__builtin__', '__builtins__', '__doc__', '__loader__', '__name__', '__package__', '__session__', '__spec__', '_dh', '_i', '_i1', '_i2', '_i3', '_i4', '_i5', '_i6', '_i7', '_ih', '_ii', '_iii', '_oh', 'cos', 'exit', 'get_ipython', 'numpy', 'open', 'pi', 'quit']
+<pre>['In', 'Out', '_', '_2', '_3', '__', '___', '__builtin__', '__builtins__', '__doc__', '__loader__', '__name__', '__package__', '__spec__', '_dh', '_i', '_i1', '_i2', '_i3', '_i4', '_i5', '_i6', '_i7', '_ih', '_ii', '_iii', '_oh', 'cos', 'exit', 'get_ipython', 'numpy', 'open', 'pi', 'quit']
 </pre>
 </div>
 </div>
@@ -7826,14 +7842,13 @@ a.anchor-link {
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<div style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; ">
+<div class="default" style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; color: #000;">
 <p><b>Importing all attributes into the global namespace - A word of caution:</b>
 <p>It is possible to import all objects from a module:
 <pre>
     from numpy import *
 </pre>
 <p>THIS IS GENERALLY DISCOURAGED. It makes a mess of your namespace, it makes it difficult to tell where any given name was defined, and it increases the likelihood of name conflicts.  In addition, against intuitive interpretation, it does not "import everything".  The behavior of this command is defined by the implementation of the module, so it can be difficult to predict what you will get.
-
 </p></p></p></div>
 </div>
 </div>
@@ -7845,7 +7860,7 @@ a.anchor-link {
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<div style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; ">
+<div class="default" style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; color: #000;">
 <p><b>This is a common way to import:</b>
 <p>Packages can be renamed on import and standard shorthand notation has developed for various packages. For instance, Numpy is commonly imported as <code>np</code>. Following this convention is not required, but doing so makes it makes it easier to share code.
 </p></p></div>
@@ -7900,10 +7915,9 @@ a.anchor-link {
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<div style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; ">
+<div class="default" style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; color: #000;">
 <h2>Installing new modules</h2>
 <p>Python comes with a large set of useful packages pre-installed, and Anaconda builds on those with an even larger set of computational tools. But every once in a while, we may need to install something new.
-
 <p>The most common place for developers to publish new packages is on the <a href="http://pypi.python.org">Python Package Index</a>, and the easiest way to install these packages is with the <code>pip</code> command:
 <div> <!-- NOTE: this div is a workaround for a jupyter HTML export bug --> </div>
 </p></p></div>
@@ -7920,6 +7934,8 @@ a.anchor-link {
 <div class="cm-editor cm-s-jupyter">
 <div class="highlight hl-ipython3"><pre><span></span><span class="c1"># NOTE: This is not Python! </span>
 <span class="c1"># Starting a line with ! tells Jupyter to run a shell command instead.</span>
+<span class="c1"># you could achieve the same thing by running `pip install statsmodels` </span>
+<span class="c1"># in your conda-activated terminal</span>
 <span class="o">!</span>pip<span class="w"> </span>install<span class="w"> </span>statsmodels
 </pre></div>
 </div>
@@ -7933,24 +7949,30 @@ a.anchor-link {
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain" tabindex="0">
-<pre>Collecting statsmodels
-  Downloading statsmodels-0.14.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (10.1 MB)
-     <span class="ansi-black-intense-fg">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</span> <span class="ansi-green-fg">10.1/10.1 MB</span> <span class="ansi-red-fg">68.6 MB/s</span> eta <span class="ansi-cyan-fg">0:00:00</span>00:010:01
-Requirement already satisfied: pandas&gt;=1.0 in /opt/conda/lib/python3.10/site-packages (from statsmodels) (2.0.3)
-Collecting patsy&gt;=0.5.2
-  Downloading patsy-0.5.3-py2.py3-none-any.whl (233 kB)
-     <span class="ansi-black-intense-fg">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</span> <span class="ansi-green-fg">233.8/233.8 kB</span> <span class="ansi-red-fg">44.8 MB/s</span> eta <span class="ansi-cyan-fg">0:00:00</span>
-Requirement already satisfied: scipy!=1.9.2,&gt;=1.4 in /opt/conda/lib/python3.10/site-packages (from statsmodels) (1.11.1)
-Requirement already satisfied: packaging&gt;=21.3 in /opt/conda/lib/python3.10/site-packages (from statsmodels) (23.1)
-Requirement already satisfied: numpy&gt;=1.18 in /opt/conda/lib/python3.10/site-packages (from statsmodels) (1.24.0)
-Requirement already satisfied: python-dateutil&gt;=2.8.2 in /opt/conda/lib/python3.10/site-packages (from pandas&gt;=1.0-&gt;statsmodels) (2.8.2)
-Requirement already satisfied: tzdata&gt;=2022.1 in /opt/conda/lib/python3.10/site-packages (from pandas&gt;=1.0-&gt;statsmodels) (2023.3)
-Requirement already satisfied: pytz&gt;=2020.1 in /opt/conda/lib/python3.10/site-packages (from pandas&gt;=1.0-&gt;statsmodels) (2023.3)
-Requirement already satisfied: six in /opt/conda/lib/python3.10/site-packages (from patsy&gt;=0.5.2-&gt;statsmodels) (1.16.0)
-Installing collected packages: patsy, statsmodels
-Successfully installed patsy-0.5.3 statsmodels-0.14.0
-<span class="ansi-yellow-fg">WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv</span><span class="ansi-yellow-fg">
-</span></pre>
+<pre>Requirement already satisfied: statsmodels in /home/luke/miniconda3/envs/swdb/lib/python3.12/site-packages (0.14.2)
+Requirement already satisfied: numpy&gt;=1.22.3 in /home/luke/miniconda3/envs/swdb/lib/python3.12/site-packages (from statsmodels) (1.26.4)
+Requirement already satisfied: scipy!=1.9.2,&gt;=1.8 in /home/luke/miniconda3/envs/swdb/lib/python3.12/site-packages (from statsmodels) (1.13.0)
+Requirement already satisfied: pandas!=2.1.0,&gt;=1.4 in /home/luke/miniconda3/envs/swdb/lib/python3.12/site-packages (from statsmodels) (2.2.1)
+Requirement already satisfied: patsy&gt;=0.5.6 in /home/luke/miniconda3/envs/swdb/lib/python3.12/site-packages (from statsmodels) (0.5.6)
+Requirement already satisfied: packaging&gt;=21.3 in /home/luke/miniconda3/envs/swdb/lib/python3.12/site-packages (from statsmodels) (23.2)
+Requirement already satisfied: python-dateutil&gt;=2.8.2 in /home/luke/miniconda3/envs/swdb/lib/python3.12/site-packages (from pandas!=2.1.0,&gt;=1.4-&gt;statsmodels) (2.9.0.post0)
+Requirement already satisfied: pytz&gt;=2020.1 in /home/luke/miniconda3/envs/swdb/lib/python3.12/site-packages (from pandas!=2.1.0,&gt;=1.4-&gt;statsmodels) (2024.1)
+Requirement already satisfied: tzdata&gt;=2022.7 in /home/luke/miniconda3/envs/swdb/lib/python3.12/site-packages (from pandas!=2.1.0,&gt;=1.4-&gt;statsmodels) (2023.3)
+Requirement already satisfied: six in /home/luke/miniconda3/envs/swdb/lib/python3.12/site-packages (from patsy&gt;=0.5.6-&gt;statsmodels) (1.16.0)
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<div class="default" style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; color: #000;">
+Note that when we used `pip` to install `statsmodels`, it also ensured that any other packages required by `statsmodels` are installed at the same time.
 </div>
 </div>
 </div>
@@ -7977,7 +7999,7 @@ Successfully installed patsy-0.5.3 statsmodels-0.14.0
 <div class="jp-OutputArea-child jp-OutputArea-executeResult">
 <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[12]:</div>
 <div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain" tabindex="0">
-<pre>&lt;module 'statsmodels' from '/opt/conda/lib/python3.10/site-packages/statsmodels/__init__.py'&gt;</pre>
+<pre>&lt;module 'statsmodels' from '/home/luke/miniconda3/envs/swdb/lib/python3.12/site-packages/statsmodels/__init__.py'&gt;</pre>
 </div>
 </div>
 </div>
@@ -7989,12 +8011,10 @@ Successfully installed patsy-0.5.3 statsmodels-0.14.0
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<div style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; ">
+<div class="default" style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; color: #000;">
 <h2>Module import paths</h2>
 <p>When you imported numpy and allensdk above, you didn't need to specify the location of the module files. How did Python know where to find them?
-
 <p>Python keeps a list of locations on your filesystem where installed packages may reside. When we ask Python to import a new module, it checks each location in the list for either a module or a package with the name you specified.
-
 <p>We can access this list from the <code>sys</code> module, which is part of the Python standard library:
 </p></p></p></div>
 </div>
@@ -8022,12 +8042,12 @@ Successfully installed patsy-0.5.3 statsmodels-0.14.0
 <div class="jp-OutputArea-child jp-OutputArea-executeResult">
 <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[13]:</div>
 <div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain" tabindex="0">
-<pre>['/root/capsule/code/solutions',
- '/opt/conda/lib/python310.zip',
- '/opt/conda/lib/python3.10',
- '/opt/conda/lib/python3.10/lib-dynload',
+<pre>['/home/luke/docs/swdb/python_bootcamp/code/solutions',
+ '/home/luke/miniconda3/envs/swdb/lib/python312.zip',
+ '/home/luke/miniconda3/envs/swdb/lib/python3.12',
+ '/home/luke/miniconda3/envs/swdb/lib/python3.12/lib-dynload',
  '',
- '/opt/conda/lib/python3.10/site-packages']</pre>
+ '/home/luke/miniconda3/envs/swdb/lib/python3.12/site-packages']</pre>
 </div>
 </div>
 </div>
@@ -8039,9 +8059,8 @@ Successfully installed patsy-0.5.3 statsmodels-0.14.0
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<div style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; ">
+<div class="default" style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; color: #000;">
 <p>When we install new packages, their files must be added to one of the entries in <code>sys.path</code>; otherwise, they will not be importable. (We could also modify <code>sys.path</code> to include the new location of the package, but this is generally discouraged.)
-
 <p>Let's see what happens when we try to import a module that cannot be found:
 </p></p></div>
 </div>
@@ -8056,6 +8075,7 @@ Successfully installed patsy-0.5.3 statsmodels-0.14.0
 <div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="cm-editor cm-s-jupyter">
 <div class="highlight hl-ipython3"><pre><span></span><span class="kn">import</span> <span class="nn">not_a_real_module</span>
+<span class="c1"># raises an exception</span>
 </pre></div>
 </div>
 </div>
@@ -8086,9 +8106,8 @@ Cell <span class="ansi-green-fg">In[14], line 1</span>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<div style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; ">
-<p>The error above is a common source of frustration for Python beginners, and it happens most frequently when there are multiple Python environments installed on a machine. When we install new packages, it is important to be aware of <i>which environment</i> the package is being installed into. Find the actual installed location of the module files, and verify that these are indeed in your <code>sys.path</code>. 
-
+<div class="default" style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; color: #000;">
+<p>The error above is a common source of frustration for Python beginners, and it happens most frequently when there are multiple Python environments installed on a machine. When we install new packages, it is important to be aware of <i>which environment</i> the package is being installed into. Find the actual installed location of the module files, and verify that these are indeed in your <code>sys.path</code>.
 </p></div>
 </div>
 </div>
@@ -8100,7 +8119,7 @@ Cell <span class="ansi-green-fg">In[14], line 1</span>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<div style="background: #DFF0D8; border-radius: 3px; padding: 10px;">
+<div class="exercise" style="background: #DFF0D8; border-radius: 3px; padding: 10px; color: #000;">
 <p><b>Exercise 3.1:</b>
 <p>Find the location of the statsmodels module on your disk and verify that it is in <code>sys.path</code>.
 </p></p></div>
@@ -8114,18 +8133,14 @@ Cell <span class="ansi-green-fg">In[14], line 1</span>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<div style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; ">
+<div class="default" style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; color: #000;">
 <h2>Using the OS module for dealing with paths, filenames and other miscellaneous operating system functions</h2>
-<p>Directories (folders) and files on your hard drives(s) are organized in a tree structure. Nodes are directories and files, while edges indicate containment. As you navigate from directory to directory, you trace out a path through this tree. Paths can be represented as strings like this in Linux and Mac:
-
+<p>Directories (folders) and files on your hard drive are organized in a tree structure. Folders contain subfolders, which contain more subfolders, and so on until the folder that contains your file of interest. The _path_ through these folders to a file can be represented as strings like this in Linux and Mac:
 <p>    <code>path = "/folder_a/folder_b/file.name"</code>
 <p>And like this on Windows:
-
 <p>    <code>path = "C:\\folder_a\\folder_b\\file.name"</code>
 <p>We use these path strings when instructing Python to read and write files.
-
 <p>Dealing with paths will be substantially easier if you first import the <code>os</code> module:
-
 </p></p></p></p></p></p></div>
 </div>
 </div>
@@ -8135,7 +8150,7 @@ Cell <span class="ansi-green-fg">In[14], line 1</span>
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [17]:</div>
+<div class="jp-InputPrompt jp-InputArea-prompt">In [15]:</div>
 <div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="cm-editor cm-s-jupyter">
 <div class="highlight hl-ipython3"><pre><span></span><span class="kn">import</span> <span class="nn">os</span>
@@ -8151,15 +8166,12 @@ Cell <span class="ansi-green-fg">In[14], line 1</span>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<div style="background: #DFF0D8; border-radius: 3px; padding: 10px;">
+<div class="exercise" style="background: #DFF0D8; border-radius: 3px; padding: 10px; color: #000;">
 <p><b>Exercise 3.2:</b>
-<p><code>os.path.join</code> is a simple function that joins together multiple folder names using either a forward slash <code>/</code> or backslash <code>\</code> depending on the operating system. 
-
+<p><code>os.path.join</code> is a simple function that joins together multiple folder names using either a forward slash <code>/</code> or backslash <code>\</code> depending on the operating system.
 <p>    <code>os.path.join('Users', 'my_username', 'my_data_folder')</code>
 <p>This is a convenient way to generate path names in code that you want to be portable.
-
 <p>Replace the names above with real folder names to a path on your system and see what is output:
-
 </p></p></p></p></p></div>
 </div>
 </div>
@@ -8169,7 +8181,7 @@ Cell <span class="ansi-green-fg">In[14], line 1</span>
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [18]:</div>
+<div class="jp-InputPrompt jp-InputArea-prompt">In [16]:</div>
 <div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="cm-editor cm-s-jupyter">
 <div class="highlight hl-ipython3"><pre><span></span><span class="n">name_1</span> <span class="o">=</span> <span class="s1">'users'</span>
@@ -8201,7 +8213,7 @@ Cell <span class="ansi-green-fg">In[14], line 1</span>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<div style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; ">
+<div class="default" style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; color: #000;">
 <p>Another couple of handy functions are <code>getcwd</code> and <code>listdir</code>
 </p></div>
 </div>
@@ -8212,7 +8224,7 @@ Cell <span class="ansi-green-fg">In[14], line 1</span>
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [19]:</div>
+<div class="jp-InputPrompt jp-InputArea-prompt">In [17]:</div>
 <div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="cm-editor cm-s-jupyter">
 <div class="highlight hl-ipython3"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="s2">"current directory:"</span><span class="p">)</span>
@@ -8233,7 +8245,7 @@ Cell <span class="ansi-green-fg">In[14], line 1</span>
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain" tabindex="0">
 <pre>current directory:
-/root/capsule/code/solutions
+/home/luke/docs/swdb/python_bootcamp/code/solutions
 
 
 files in current directory:
@@ -8241,22 +8253,30 @@ files in current directory:
 </div>
 </div>
 <div class="jp-OutputArea-child jp-OutputArea-executeResult">
-<div class="jp-OutputPrompt jp-OutputArea-prompt">Out[19]:</div>
+<div class="jp-OutputPrompt jp-OutputArea-prompt">Out[17]:</div>
 <div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain" tabindex="0">
-<pre>['sklearn-dim-reduction.ipynb',
- '06_Introduction_to_Matplotlib_solutions.ipynb',
- 'sklearn-tutorial.ipynb',
- '02_Basic_Python_II_Control_Flow_and_Functions_solutions.ipynb',
- '01_Basic_Python_I_Object_and_Data_Structures_solutions.ipynb',
- 'my_module.py',
- 'my_package',
- '.ipynb_checkpoints',
- '03_Modules_and_Packages_solutions.ipynb',
+<pre>['01_Basic_Python_I_Object_and_Data_Structures_solutions.html',
  '04_Introduction_To_Numpy_solutions.ipynb',
+ '03_Modules_and_Packages_solutions.html',
+ '06_Introduction_to_Matplotlib_solutions.html',
+ '01_Basic_Python_I_Object_and_Data_Structures_solutions.ipynb',
+ '.ipynb_checkpoints',
+ '02_Basic_Python_II_Control_Flow_and_Functions_solutions.html',
+ 'ephys_data.npy',
+ 'my_module.py',
+ '08_Scikit-Learn_solutions.html',
+ 'my_package',
+ '06_Introduction_to_Matplotlib_solutions.ipynb',
+ 'html',
  '05_Custom_Modules_solutions.ipynb',
- '07_Scikit-Learn.ipynb',
- '08_Introduction_To_Pandas_solutions.ipynb',
- '09_Introduction_to_Seaborn_solutions.ipynb']</pre>
+ 'my_data.npy',
+ '03_Modules_and_Packages_solutions.ipynb',
+ '04_Introduction_To_Numpy_solutions.html',
+ '05_Custom_Modules_solutions.html',
+ '02_Basic_Python_II_Control_Flow_and_Functions_solutions.ipynb',
+ '07_Introduction_To_Pandas_solutions.html',
+ '07_Introduction_To_Pandas_solutions.ipynb',
+ '08_Scikit-Learn_solutions.ipynb']</pre>
 </div>
 </div>
 </div>
@@ -8268,7 +8288,7 @@ files in current directory:
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<div style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; ">
+<div class="default" style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; color: #000;">
 <p>To find out if a path actually exists on your drive, use:
 <p>    <code>os.path.exists(path)</code>
 </p></p></div>
@@ -8282,7 +8302,7 @@ files in current directory:
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<div style="background: #DFF0D8; border-radius: 3px; padding: 10px;">
+<div class="exercise" style="background: #DFF0D8; border-radius: 3px; padding: 10px; color: #000;">
 <p><b>Exercise 3.3:</b>
 <p>Create a folder called <code>TempFolder</code> somewhere on your local drive
 <ol>
@@ -8301,16 +8321,21 @@ files in current directory:
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [20]:</div>
+<div class="jp-InputPrompt jp-InputArea-prompt">In [18]:</div>
 <div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="cm-editor cm-s-jupyter">
-<div class="highlight hl-ipython3"><pre><span></span><span class="n">new_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s1">'..'</span><span class="p">,</span> <span class="s1">'support_files'</span><span class="p">,</span> <span class="s1">'TempFolder'</span><span class="p">)</span>
+<div class="highlight hl-ipython3"><pre><span></span><span class="n">new_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">(),</span> <span class="s1">'TempFolder'</span><span class="p">)</span>
 
-<span class="nb">print</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">new_path</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"new path: </span><span class="si">{</span><span class="n">new_path</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"  exists? </span><span class="si">{</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">new_path</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
-<span class="n">os</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">new_path</span><span class="p">)</span>
+<span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">new_path</span><span class="p">):</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">"  creating directory"</span><span class="p">)</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">new_path</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"  exists now? </span><span class="si">{</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">new_path</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
-<span class="nb">print</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">new_path</span><span class="p">))</span>
+<span class="c1"># clean up</span>
+<span class="n">os</span><span class="o">.</span><span class="n">removedirs</span><span class="p">(</span><span class="n">new_path</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -8323,8 +8348,10 @@ files in current directory:
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain" tabindex="0">
-<pre>False
-True
+<pre>new path: /home/luke/docs/swdb/python_bootcamp/code/solutions/TempFolder
+  exists? False
+  creating directory
+  exists now? True
 </pre>
 </div>
 </div>
@@ -8337,10 +8364,9 @@ True
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<div style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; ">
+<div class="default" style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; color: #000;">
 <left><h1>A Brief Introduction to Scipy</h1></left>
 <p>The Scipy library has a lot of useful functions for signal processing, linear algebra, statistical testing, etc. Given its breadth, and its overlap with Numpy, we've elected not to cover it in detail here.
-
 </p></div>
 </div>
 </div>
@@ -8352,7 +8378,7 @@ True
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<div style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; ">
+<div class="default" style="border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; color: #000;">
 <p><b>The Scipy library has ~20 subpackages</b>
 <p>each subpackage contains a lot of useful functions<p>
 <ol>
@@ -8366,7 +8392,7 @@ True
 <li>Miscellaneous routines (scipy.misc)
 <li><b>Multi-dimensional image processing</b> (scipy.ndimage)
 <li>Orthogonal distance regression (scipy.odr)
-<li>Optimization and root finding (scipy.optimize)
+<li><b>Optimization and root finding</b> (scipy.optimize)
 <li><b>Signal processing</b> (scipy.signal)
 <li>Sparse matrices (scipy.sparse)
 <li>Sparse linear algebra (scipy.sparse.linalg)
@@ -8388,7 +8414,7 @@ True
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<div style="background: #DFF0D8; border-radius: 3px; padding: 10px;">
+<div class="exercise" style="background: #DFF0D8; border-radius: 3px; padding: 10px; color: #000;">
 <p><b>Exercise 3.4:</b>
 <p>Spend a few minutes exploring the scipy documnention here:
 <p><a href="http://docs.scipy.org/doc/scipy/reference/">scipy reference</a>
