@@ -1,5 +1,7 @@
 metadata_version: 1
 name: SWDB Python Bootcamp 2024
+description: This capsule provides the course material for the Python Bootcamp, August
+  17th-18th, 2024.
 authors:
 - name: Michael Buice
 - name: Luke Campagnola
