@@ -1,5 +1,6 @@
-# hash:sha256:cc865d9276139e43db4a6b079c5a1279312dae01123aa1e660bf4cf3252abdc8
-FROM registry.codeocean.allenneuraldynamics.org/codeocean/mambaforge3:23.1.0-4-python3.10.12-ubuntu22.04
+# hash:sha256:efca1172edd3536abcab9d002ad19a753489bd210364d571fb733a92fb2bc5a2
+ARG REGISTRY_HOST
+FROM $REGISTRY_HOST/codeocean/mambaforge3:23.1.0-4-python3.10.12-ubuntu22.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 
