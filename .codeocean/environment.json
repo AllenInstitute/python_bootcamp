@@ -1,0 +1,61 @@
+{
+	"version": 1,
+	"base_image": "codeocean/mambaforge3:23.1.0-4-python3.10.12-ubuntu22.04",
+	"post_install": true,
+	"options": {
+		"registry_host_arg": true,
+		"git_ask_pass": true
+	},
+	"installers": {
+		"mamba": {
+			"packages": [
+				{
+					"name": "jupyterlab",
+					"version": "3.6.2"
+				},
+				{
+					"name": "matplotlib",
+					"version": "3.7.2"
+				},
+				{
+					"name": "notebook",
+					"version": "6.5.4"
+				},
+				{
+					"name": "numpy",
+					"version": "1.24.4"
+				},
+				{
+					"name": "pandas",
+					"version": "2.0.3"
+				},
+				{
+					"name": "scikit-learn",
+					"version": "1.3.0"
+				},
+				{
+					"name": "scipy",
+					"version": "1.11.1"
+				},
+				{
+					"name": "seaborn",
+					"version": "0.12.2"
+				}
+			]
+		},
+		"pip": {
+			"packages": [
+				{
+					"name": "pyarrow",
+					"version": "12.0.1"
+				},
+				{
+					"name": "umap-learn",
+					"version": "0.5.3"
+				}
+			],
+			"options": {},
+			"pre_install_options": {}
+		}
+	}
+}

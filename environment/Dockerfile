@@ -1,11 +1,9 @@
-# hash:sha256:efca1172edd3536abcab9d002ad19a753489bd210364d571fb733a92fb2bc5a2
+# hash:sha256:6549aa2fdc04c86d80685b5036027f609bad68b33e0d69181920cddeea390430
 ARG REGISTRY_HOST
 FROM $REGISTRY_HOST/codeocean/mambaforge3:23.1.0-4-python3.10.12-ubuntu22.04
 
 ARG DEBIAN_FRONTEND=noninteractive
-
 ARG GIT_ASKPASS
-ARG GIT_ACCESS_TOKEN
 COPY git-askpass /
 
 RUN mamba install -y \
