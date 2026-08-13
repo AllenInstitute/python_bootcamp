@@ -1,5 +1,5 @@
 Python Bootcamp for the Summer Workshop on the Dynamic Brain
-![SWDB](/code/support_files/images/cropped-SummerWorkshop_Header.png)
+![SWDB](/code/support_files/images/swdb_logo.jpg)
 
 This repository contains course materials for the Python Bootcamp that precedes the Summer Workshop on the Dynamic Brain.
 
