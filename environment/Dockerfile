@@ -1,10 +1,10 @@
-# hash:sha256:6549aa2fdc04c86d80685b5036027f609bad68b33e0d69181920cddeea390430
+# hash:sha256:a6670205c4bbb77c149ae554a4de0dab3bf9e341416e81b4a85f34a694c89a1a
 ARG REGISTRY_HOST
-FROM $REGISTRY_HOST/codeocean/mambaforge3:23.1.0-4-python3.10.12-ubuntu22.04
+FROM $REGISTRY_HOST/codeocean/code-server-python-extensions-pack:code-server4.129.0python3.12.4codeocean-mcp-serveruvpyreflyetc
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG GIT_ASKPASS
-COPY git-askpass /
+COPY git-ask-pass /
 
 RUN mamba install -y \
         jupyterlab==3.6.2 \
@@ -22,4 +22,5 @@ RUN pip install -U --no-cache-dir \
     umap-learn==0.5.3
 
 COPY postInstall /
-RUN /postInstall
+RUN --mount=type=secret,id=secrets . /run/secrets/secrets \
+    && /postInstall
