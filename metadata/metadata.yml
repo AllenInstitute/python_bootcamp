@@ -1,12 +1,12 @@
 metadata_version: 1
 name: SWDB Python Bootcamp
-description: This capsule provides the course material for the Python Bootcamp, August
-  17th-18th, 2024.
+description: This capsule provides the course material for the Python Bootcamp for
+  the Summer Workshop on the Dynamic Brain.
 authors:
 - name: Michael Buice
 - name: Luke Campagnola
 - name: Clark Roll
 - name: Anna Grim
-- name: Khoosha Khalvati
 - name: many others
 - name: <Mekhla Kapoor
+- name: Koosha Khalvati

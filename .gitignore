@@ -4,3 +4,4 @@
 *.npy
 .Trash*
 .vscodeagent_helpers/
+.vscode
