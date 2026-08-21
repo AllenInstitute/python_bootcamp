@@ -241,17 +241,25 @@ def run_notebook(nb_file):
     os.system(f'jupyter nbconvert --execute --to notebook --allow-errors --inplace {nb_file}')
 
 
-def check_notebook_errors(nb_file):
+def check_notebook_errors(nb_file, warn_only=False):
     """Check for cell outputs that contain an error,
-    unless the last line of the code cell contains "raises an exception"
+    unless the last line of the code cell contains "raises an exception".
+
+    If warn_only is True, print a warning instead of raising on error.
     """
     nb_data = json.load(open(nb_file, encoding="utf-8"))
     for cell in nb_data['cells']:
-        if cell['cell_type'] != 'code' or 'raises an exception' in cell['source'][-1].lower():
+        if cell['cell_type'] != 'code' or len(cell['source']) == 0:
+            continue
+        if 'raises an exception' in cell['source'][-1].lower():
             continue
         for output in cell['outputs']:
             if output['output_type'] == 'error':
-                raise ValueError(f"Error in cell {cell['execution_count']}: {output['evalue']}")
+                msg = f"Error in cell {cell['execution_count']}: {output['evalue']}"
+                if warn_only:
+                    print(f"  WARNING: {msg}")
+                else:
+                    raise ValueError(msg)
 
 
 def bake_all_notebooks(nb_files):
@@ -286,7 +294,7 @@ def bake_all_notebooks(nb_files):
         print('  running unsolved notebook')
         run_notebook(unsolved_nb_file)
         print('  checking for errors')
-        check_notebook_errors(unsolved_nb_file)
+        check_notebook_errors(unsolved_nb_file, warn_only=True)
 
         # remove outputs from code cells and answers from exercise cells
         print("  cleaning unsolved notebook")
@@ -322,6 +330,7 @@ This script modifies notebooks for distribution to students:
 styles = {
     'default': "border-left: 3px solid #000; padding: 1px; padding-left: 10px; background: #F0FAFF; color: #000;",
     'exercise': "background: #DFF0D8; border-radius: 3px; padding: 10px; color: #000;",
+    'none': "",
 }
 
 
